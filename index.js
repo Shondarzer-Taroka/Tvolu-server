@@ -3,7 +3,8 @@ const cors=require('cors')
 const port=process.env.PORT || 5588
 require('dotenv').config()
 const app=express()
-
+const jwt =require('jsonwebtoken')
+const cokieParser=require('cookie-parser')
 app.use(express.json())
 app.use(cors())
 
@@ -25,9 +26,19 @@ async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
         // await client.connect();
-    let volunteerCollection=client.db('volunteerDB').collection('volunteers')
+    // let volunteerCollection=client.db('volunteerDB').collection('volunteers')
     let addedvolunteersCollection=client.db('volunteerDB').collection('addedvolunteers')
     let requestvolunteersCollection=client.db('volunteerDB').collection('requestvolunteers')
+
+
+    // jwt starts
+     app.post('/jwt',async(req,res)=>{
+      let user=req.body 
+      let token=jwt.sign(user,'secret',{expiresIn:'7d'})
+     })
+    // jwt ends
+
+
     app.get('/volunteerneed',async(req,res)=>{
       let cursor=addedvolunteersCollection.find()
       let result= await cursor
@@ -125,17 +136,13 @@ async function run() {
 
 
     // requested collections start
-   app.post('/requsted',async(req,res)=>{
+    app.post('/requsted',async(req,res)=>{
     let requstVolunteer=req.body 
     let result= await requestvolunteersCollection.insertOne(requstVolunteer)
-    // console.log(requstVolunteer._id);
-    // let objectID= requstVolunteer._id
-    console.log(requstVolunteer.vlId); 
-    addedvolunteersCollection.updateMany({},{$inc:{volunteer_number:1}}) 
-    // ObjectId.toString()
-    // console.log(ObjectId(requstVolunteer._id).valueOf());  
-    res .send(result)  
-   })  
+    // console.log(requstVolunteer.g); 
+    const volunteer= await addedvolunteersCollection.findOneAndUpdate({_id:new ObjectId(requstVolunteer.g)},{$inc:{volunteer_number:-1}},{new:true})
+     res .send(result)  
+   })   
 
 
    app.get('/myrequestedvolunteer/:email',async(req,res)=>{
