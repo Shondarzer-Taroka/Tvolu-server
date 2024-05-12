@@ -34,7 +34,13 @@ async function run() {
     // jwt starts
      app.post('/jwt',async(req,res)=>{
       let user=req.body 
-      let token=jwt.sign(user,'secret',{expiresIn:'7d'})
+      let token=jwt.sign(user,process.env.ACCESS_TOKEN_SECRET,{expiresIn:'7d'})
+      res.cookie('token',token,{
+        httpOnly:true,
+        secure:false
+        
+      })
+      .send({success:true})
      })
     // jwt ends
 
