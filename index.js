@@ -27,8 +27,9 @@ async function run() {
         // await client.connect();
     let volunteerCollection=client.db('volunteerDB').collection('volunteers')
     let addedvolunteersCollection=client.db('volunteerDB').collection('addedvolunteers')
+    let requestvolunteersCollection=client.db('volunteerDB').collection('requestvolunteers')
     app.get('/volunteerneed',async(req,res)=>{
-      let cursor=volunteerCollection.find()
+      let cursor=addedvolunteersCollection.find()
       let result= await cursor
       .sort({deadline:-1})
       .toArray()
@@ -50,16 +51,114 @@ async function run() {
       res.send(result)  
     })
 
+    app.put('/updatevolunteer/:id',async(req,res)=>{
+      let updatebody=req.body
+      let id=req.params.id
+      let query= {_id:new ObjectId(id)}
+      let options = { upsert: true }
+      let updateddoc={
+        $set:{
+          thumbnail:updatebody.thumbnail,
+          post_title:updatebody.post_title,
+          category:updatebody.category,
+          location:updatebody.location,
+          volunteer_number:updatebody.volunteer_number,
+          deadline:updatebody.deadline,
+          organizer_email:updatebody.organizer_email,
+          organizer_name:updatebody.organizer_name,
+          description:updatebody.description
+        }
+
+      }
+      let result=await addedvolunteersCollection.updateOne(query,updateddoc,options)
+      res.send(result)  
+    })
+
+    app.delete('/deletevolunteer/:id',async(req,res)=>{
+     let id= req.params.id 
+     let item= req.body 
+     let query= {_id:new ObjectId(id)}
+     let result=await addedvolunteersCollection.deleteOne(query)
+     res.send(result)
+    })
+
+
+    app.get('/updateitem/:id',async(req,res)=>{
+      let id=req.params.id
+      let query= {_id:new ObjectId(id)}
+      let result=await addedvolunteersCollection.findOne(query)
+      res.send(result)  
+    })
+     
+    app.get('/bevolunteer/:id',async(req,res)=>{
+      let id=req.params.id
+      let query= {_id:new ObjectId(id)}
+      let result=await addedvolunteersCollection.findOne(query)
+      res.send(result)  
+    })
+
     app.get('/needaddvolunteer',async(req,res)=>{
       let cursor=addedvolunteersCollection.find()
       let result=await cursor.toArray();
       res.send(result)
     })
+
+
+    app.get('/myneedvolunteer/:email',async(req,res)=>{
+      let email=req.params.email 
+      let query= {organizer_email:email}
+      let result= await addedvolunteersCollection.find(query).toArray();
+      res.send(result)
+    })
+
+    // app.get('/myneedvolunteer',async(req,res)=>{
+    //   let query={}
+    //     if (req.query?.email) {
+    //         query={email:req.query.email}
+    //     }
+    //   // let email=req.params.email 
+    //   // let query= {email:email}
+    //   let result= await addedvolunteersCollection.find(query).toArray();
+    //   res.send(result)
+    // })
+
+
+
+    // requested collections start
+   app.post('/requsted',async(req,res)=>{
+    let requstVolunteer=req.body 
+    let result= await requestvolunteersCollection.insertOne(requstVolunteer)
+    // console.log(requstVolunteer._id);
+    // let objectID= requstVolunteer._id
+    console.log(requstVolunteer.vlId); 
+    addedvolunteersCollection.updateMany({},{$inc:{volunteer_number:1}}) 
+    // ObjectId.toString()
+    // console.log(ObjectId(requstVolunteer._id).valueOf());  
+    res .send(result)  
+   })  
+
+
+   app.get('/myrequestedvolunteer/:email',async(req,res)=>{
+    let email=req.params.email 
+    let query= {volunteer_email:email}
+    let result= await requestvolunteersCollection.find(query).toArray();
+    res.send(result) 
+  })
+
+
+  app.delete('/cancelrequested/:id',async(req,res)=>{
+    let id= req.params.id 
+    let item= req.body 
+    let query= {_id:new ObjectId(id)}
+    let result=await requestvolunteersCollection.deleteOne(query)
+    res.send(result)
+   })
+    // requested collections end
     // Send a ping to confirm a successful connection
 
-    
+     
 
-    await client.db("admin").command({ ping: 1 });
+    // await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
   } finally {
     // Ensures that the client will close when you finish/error
