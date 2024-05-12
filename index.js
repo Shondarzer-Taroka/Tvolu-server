@@ -6,7 +6,30 @@ const app=express()
 const jwt =require('jsonwebtoken')
 const cokieParser=require('cookie-parser')
 app.use(express.json())
-app.use(cors())
+
+
+app.use(cors({
+  origin:['http://localhost:5173','http://localhost:5174'],
+  credentials:true
+}))
+app.use(cokieParser())
+
+
+const verify=async(req,res,next)=>{
+  console.log(req.cookies?.token);
+  if (!req.cookies.token) {
+    return res.status(401).send({message:'unauthorized'})
+  }
+  
+  jwt.verify(req.cookies?.token,process.env.ACCESS_TOKEN_SECRET,(err,decoded)=>{
+    if (err) {
+      return res.status(401).send({message:'unauthorized'})
+    }
+    console.log('de',decoded);
+    req.user=decoded
+    next()
+  })
+}
 
 
 
@@ -38,10 +61,16 @@ async function run() {
       res.cookie('token',token,{
         httpOnly:true,
         secure:false
-        
       })
       .send({success:true})
      })
+
+
+     app.post('/logout',async(req,res)=>{
+      let user=req.body
+       res.clearCookie('token',{maxAge:0}).send({success:true})
+      console.log(user);
+    })
     // jwt ends
 
 
@@ -56,6 +85,7 @@ async function run() {
 
     app.post('/addvolunteer',async(req,res)=>{
       let addedVolunteer=req.body 
+
       let result =await addedvolunteersCollection.insertOne(addedVolunteer)
       res.send(result)
     })
@@ -151,8 +181,12 @@ async function run() {
    })   
 
 
-   app.get('/myrequestedvolunteer/:email',async(req,res)=>{
+   app.get('/myrequestedvolunteer/:email',verify,async(req,res)=>{
     let email=req.params.email 
+    // if (req.query.email !== req.use.email) {
+    //   return  res.status(403).send({message:'unauthorized'})
+    // }
+    console.log( req.user.email);
     let query= {volunteer_email:email}
     let result= await requestvolunteersCollection.find(query).toArray();
     res.send(result) 
