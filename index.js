@@ -9,20 +9,25 @@ app.use(express.json())
 
 
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://localhost:5174'],
+  origin: ["http://localhost:5173", 
+  "http://localhost:5174",
+  "https://assignment-eleven-df832.web.app",
+  "https://assignment-eleven-df832.firebaseapp.com"
+],
   credentials: true
 }))
 app.use(cokieParser())
 
 
 const verify = async (req, res, next) => {
-  // console.log(req.cookies?.token);
+  console.log(req.cookies?.token);
   if (!req.cookies.token) {
     return res.status(401).send({ message: 'unauthorized' })
   }
 
   jwt.verify(req.cookies?.token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
     if (err) {
+      // console.log('ver',err);
       return res.status(401).send({ message: 'unauthorized' })
     }
     // console.log('de', decoded);
@@ -45,6 +50,12 @@ const client = new MongoClient(uri, {
   }
 });
 
+ const cokieOption= {
+  httpOnly: true,
+  sameSite:process.env.NODE_ENV==="production" ? "none": "strict",
+  secure:process.env.NODE_ENV==="production"? true : false
+};
+
 async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
@@ -58,18 +69,16 @@ async function run() {
     app.post('/jwt', async (req, res) => {
       let user = req.body
       let token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '7d' })
-      res.cookie('token', token, {
-        httpOnly: true,
-        secure: false
-      })
-      
+      res.cookie('token', token,cokieOption)
         .send({ success: true })
     })
 
 
     app.post('/logout', async (req, res) => {
       let user = req.body
-      res.clearCookie('token', { maxAge: 0 }).send({ success: true })
+      res.clearCookie('token', { ...cokieOption,maxAge: 0 })
+      .send({ success: true })
+    
       // console.log(user);
     })
     // jwt ends
@@ -84,7 +93,7 @@ async function run() {
 
     })
 
-    app.post('/addvolunteer',async (req, res) => {
+    app.post('/addvolunteer',verify,async (req, res) => {
       let addedVolunteer = req.body
 
       let result = await addedvolunteersCollection.insertOne(addedVolunteer)
@@ -115,7 +124,7 @@ async function run() {
 
     })
 
-    app.put('/updatevolunteer/:id', async (req, res) => {
+    app.put('/updatevolunteer/:id',verify,async (req, res) => {
       let updatebody = req.body
       let id = req.params.id
       let query = { _id: new ObjectId(id) }
@@ -132,8 +141,8 @@ async function run() {
           organizer_name: updatebody.organizer_name,
           description: updatebody.description
         }
-
       }
+      
       let result = await addedvolunteersCollection.updateOne(query, updateddoc, options)
       res.send(result)
     })
@@ -147,14 +156,14 @@ async function run() {
     })
 
 
-    app.get('/updateitem/:id', async (req, res) => {
+    app.get('/updateitem/:id',async (req, res) => {
       let id = req.params.id
       let query = { _id: new ObjectId(id) }
       let result = await addedvolunteersCollection.findOne(query)
       res.send(result)
     })
 
-    app.get('/bevolunteer/:id', async (req, res) => {
+    app.get('/bevolunteer/:id',verify, async (req, res) => {
       let id = req.params.id
       let query = { _id: new ObjectId(id) }
       let result = await addedvolunteersCollection.findOne(query)
@@ -203,7 +212,7 @@ async function run() {
 
 
     // requested collections start
-    app.post('/requsted', async (req, res) => {
+    app.post('/requsted',verify,async (req, res) => {
       let requstVolunteer = req.body
       let result = await requestvolunteersCollection.insertOne(requstVolunteer)
       // console.log(requstVolunteer.g); 
