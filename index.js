@@ -7,7 +7,6 @@ const jwt = require('jsonwebtoken')
 const cokieParser = require('cookie-parser')
 app.use(express.json())
 
-
 app.use(cors({
   origin: ["http://localhost:5173", 
   "http://localhost:5174",
@@ -74,7 +73,7 @@ async function run() {
     })
 
 
-    app.post('/logout', async (req, res) => {
+    app.post('/logout',async (req, res) => {
       let user = req.body
       res.clearCookie('token', { ...cokieOption,maxAge: 0 })
       .send({ success: true })
@@ -95,17 +94,12 @@ async function run() {
 
     app.post('/addvolunteer',verify,async (req, res) => {
       let addedVolunteer = req.body
-
       let result = await addedvolunteersCollection.insertOne(addedVolunteer)
-      // console.log(req.body);
-      // if (req.body.organizer_email !== req.user.email ) {
-      //   return  res.status(403).send({message:'unauthorized'})
-      // }
       res.send(result)
     })
 
 
-    app.get('/postdetails/:id',verify, async (req, res) => {
+    app.get('/postdetails/:id', async (req, res) => {
 
       // if (req.params.email !== req.user.email) {
       //   return  res.status(403).send({message:'unauthorized'})
@@ -129,6 +123,7 @@ async function run() {
       let id = req.params.id
       let query = { _id: new ObjectId(id) }
       let options = { upsert: true }
+
       let updateddoc = {
         $set: {
           thumbnail: updatebody.thumbnail,
@@ -142,10 +137,12 @@ async function run() {
           description: updatebody.description
         }
       }
-      
+
       let result = await addedvolunteersCollection.updateOne(query, updateddoc, options)
       res.send(result)
     })
+
+    
 
     app.delete('/deletevolunteer/:id', async (req, res) => {
       let id = req.params.id
@@ -176,7 +173,7 @@ async function run() {
       res.send(result)
     })
  
-    app.get('/posttitle/:post_title', async (req, res) => {
+    app.get('/posttitle/:post_title', async (req, res) => { 
       let post_title=req.params.post_title 
       let query= {post_title:post_title}
       let cursor = addedvolunteersCollection.find(query)
