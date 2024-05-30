@@ -26,10 +26,10 @@ const verify = async (req, res, next) => {
 
   jwt.verify(req.cookies?.token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
     if (err) {
-      // console.log('ver',err);
+      console.log('ver',err);
       return res.status(401).send({ message: 'unauthorized' })
     }
-    // console.log('de', decoded);
+    console.log('de', decoded);
     req.user = decoded
     next()
   })
@@ -62,12 +62,14 @@ async function run() {
     // let volunteerCollection=client.db('volunteerDB').collection('volunteers')
     let addedvolunteersCollection = client.db('volunteerDB').collection('addedvolunteers')
     let requestvolunteersCollection = client.db('volunteerDB').collection('requestvolunteers')
+    let feedbackCollection = client.db('volunteerDB').collection('feedback')
 
 
     // jwt starts
     app.post('/jwt', async (req, res) => {
       let user = req.body
-      let token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '7d' })
+      let token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '7d' }) 
+      console.log(token);
       res.cookie('token', token,cokieOption)
         .send({ success: true })
     })
@@ -99,7 +101,7 @@ async function run() {
     })
 
 
-    app.get('/postdetails/:id', async (req, res) => {
+    app.get('/postdetails/:id',verify,async (req, res) => {
 
       // if (req.params.email !== req.user.email) {
       //   return  res.status(403).send({message:'unauthorized'})
@@ -236,6 +238,13 @@ async function run() {
       let query = { _id: new ObjectId(id) }
       let result = await requestvolunteersCollection.deleteOne(query)
       res.send(result)
+    })
+
+
+    app.post('/feedback',async(req,res)=>{
+        let item=req.body
+        let result=await feedbackCollection.insertOne(item)
+        res.send(result)
     })
     // requested collections end
     // Send a ping to confirm a successful connection
