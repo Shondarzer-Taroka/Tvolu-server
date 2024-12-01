@@ -57,9 +57,7 @@ const client = new MongoClient(uri, {
 
 async function run() {
   try {
-    // Connect the client to the server	(optional starting in v4.7)
-    // await client.connect();
-    // let volunteerCollection=client.db('volunteerDB').collection('volunteers')
+
     let addedvolunteersCollection = client.db('volunteerDB').collection('addedvolunteers')
     let requestvolunteersCollection = client.db('volunteerDB').collection('requestvolunteers')
     let feedbackCollection = client.db('volunteerDB').collection('feedback')
@@ -113,11 +111,6 @@ async function run() {
       let query = { _id: new ObjectId(id) }
       let result = await addedvolunteersCollection.findOne(query)
       res.send(result)
-      // if (result.organizer_email !== req.user.email ) {
-      //   return  res.status(403).send({message:'unauthorized'})
-      // }
-      // console.log(result);
-
     })
 
     app.put('/updatevolunteer/:id',verify,async (req, res) => {
@@ -169,11 +162,39 @@ async function run() {
       res.send(result)
     })
 
+
+
+    // app.get('/needaddvolunteer', async (req, res) => {
+    //   let cursor = addedvolunteersCollection.find()
+    //   let result = await cursor.toArray();
+    //   res.send(result)
+    // })
+
+
     app.get('/needaddvolunteer', async (req, res) => {
-      let cursor = addedvolunteersCollection.find()
-      let result = await cursor.toArray();
-      res.send(result)
-    })
+      try {
+          const { search } = req.query;
+  
+          // Define the query object
+          let query = {};
+          if (search) {
+              query = {
+                  post_title: { $regex: search, $options: "i" }, // Case-insensitive regex search
+              };
+          }
+  
+          // Fetch matching results from the collection
+          const cursor = addedvolunteersCollection.find(query);
+          const result = await cursor.toArray();
+  
+          res.send(result); // Send the filtered results to the client
+      } catch (error) {
+          console.error("Error fetching volunteer data:", error);
+          res.status(500).send({ error: "Failed to fetch volunteer data" });
+      }
+  });
+  
+
  
     app.get('/posttitle/:post_title', async (req, res) => { 
       let post_title=req.params.post_title 
@@ -185,9 +206,7 @@ async function run() {
 
   
     app.get('/myneedvolunteer/:email', verify, async (req, res) => {
-      // console.log(req.user.email);
-      // console.log(req.params.email);
-      // console.log(req.body.organizer_email);
+
       if (req.params.email !== req.user.email) {
         return res.status(403).send({ message: 'unauthorized' })
       }
@@ -197,17 +216,7 @@ async function run() {
       res.send(result)
     })
 
-    // app.get('/myneedvolunteer',async(req,res)=>{
-    //   let query={}
-    //     if (req.query?.email) {
-    //         query={email:req.query.email}
-    //     }
-    //   // let email=req.params.email 
-    //   // let query= {email:email}
-    //   let result= await addedvolunteersCollection.find(query).toArray();
-    //   res.send(result)
-    // })
-
+ 
 
 
     // requested collections start
@@ -251,7 +260,7 @@ async function run() {
 
 
 
-    // await client.db("admin").command({ ping: 1 });
+    await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
   } finally {
     // Ensures that the client will close when you finish/error

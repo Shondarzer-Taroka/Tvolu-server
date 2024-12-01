@@ -1,3 +1,11 @@
 node_modules
 .env
 .vercel
+garbase
+config
+controllers
+middlewares
+models 
+routes
+app.js
+server.js
