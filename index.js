@@ -5,7 +5,13 @@ require('dotenv').config()
 const app = express()
 const jwt = require('jsonwebtoken')
 const cokieParser = require('cookie-parser')
+
+const bodyParser = require('body-parser');
 app.use(express.json())
+app.use(bodyParser.json());
+
+const Stripe = require('stripe');
+const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 
 app.use(cors({
   origin: ["http://localhost:5173", 
@@ -59,6 +65,8 @@ async function run() {
   try {
 
     let addedvolunteersCollection = client.db('volunteerDB').collection('addedvolunteers')
+    // const collection = db.collection('transactions');
+    let transactionCollection = client.db('volunteerDB').collection('transactions')
     let requestvolunteersCollection = client.db('volunteerDB').collection('requestvolunteers')
     let feedbackCollection = client.db('volunteerDB').collection('feedback')
 
@@ -258,6 +266,131 @@ async function run() {
     // requested collections end
     // Send a ping to confirm a successful connection
 
+
+    // //  payment related
+
+    // app.post('/create-checkout-session', async (req, res) => {
+    //   const { name, email, amount } = req.body;
+    
+    //   try {
+    //     const session = await stripe.checkout.sessions.create({
+    //       payment_method_types: ['card'],
+    //       mode: 'payment',
+    //       line_items: [
+    //         {
+    //           price_data: {
+    //             currency: 'usd',
+    //             product_data: {
+    //               name: 'Donation',
+    //               description: `Donation by ${name}`,
+    //             },
+    //             unit_amount: parseInt(amount) * 100, // Convert to cents
+    //           },
+    //           quantity: 1,
+    //         },
+    //       ],
+    //       customer_email: email,
+    //       success_url: `http://localhost:5173/success?session_id=${session.id}`,
+    //       cancel_url: 'http://localhost:5173/cancel',
+    //     });
+    
+    //     // Save transaction details to MongoDB
+        
+       
+    //    let result= await transactionCollection.insertOne({
+    //       name,
+    //       email,
+    //       amount,
+    //       sessionId: session.id,
+    //       createdAt: new Date(),
+    //     });
+    
+    //     res.status(200).json({ url: session.url });
+    //   } catch (error) {
+    //     console.error('Stripe checkout error:', error);
+    //     res.status(500).json({ error: 'Something went wrong' });
+    //   }
+    // });
+
+
+    app.post('/create-checkout-session', async (req, res) => {
+      const { name, email, amount } = req.body;
+    
+      // Validate input
+      if (!amount || isNaN(amount) || amount <= 0) {
+        return res.status(400).json({ error: 'Invalid donation amount' });
+      }
+    
+      try {
+        // Prepare line items for the checkout session
+        const lineItems = [
+          {
+            price_data: {
+              currency: 'usd',
+              product_data: {
+                name: 'Donation',
+                description: `Donation by ${name}`,
+              },
+              unit_amount: parseInt(amount) * 100, // Convert to cents
+            },
+            quantity: 1,
+          },
+        ];
+    
+        // Create a checkout session
+        const session = await stripe.checkout.sessions.create({
+          payment_method_types: ['card'],
+          mode: 'payment',
+          line_items: lineItems,
+          customer_email: email,
+          success_url: 'http://localhost:5173/success?session_id={CHECKOUT_SESSION_ID}', // Placeholder ID
+          cancel_url: 'http://localhost:5173/cancel',
+        });
+    
+        // Save transaction details to MongoDB
+        await transactionCollection.insertOne({
+          name,
+          email,
+          amount: parseFloat(amount), // Ensure the amount is a float
+          sessionId: session.id,
+          createdAt: new Date(),
+        });
+    
+        // Return the session URL
+        res.status(200).json({ url: session.url });
+      } catch (error) {
+        console.error('Stripe checkout error:', error);
+        res.status(500).json({ error: error.message || 'Something went wrong' });
+      }
+    });
+    
+    
+
+    app.get('/donation-success', async (req, res) => {
+      const { session_id } = req.query;
+      console.log(session_id);
+      
+    
+      try {
+        if (!session_id) {
+          return res.status(400).json({ error: 'Session ID is required' });
+        }
+    
+
+    
+        const donation = await transactionCollection.findOne({ sessionId: session_id });
+    
+        if (!donation) {
+          return res.status(404).json({ error: 'Donation not found' });
+        }
+    
+        res.status(200).json(donation);
+      } catch (error) {
+        console.error('Error fetching donation details:', error);
+        res.status(500).json({ error: 'Something went wrong' });
+      }
+    });
+    
 
 
     await client.db("admin").command({ ping: 1 });
