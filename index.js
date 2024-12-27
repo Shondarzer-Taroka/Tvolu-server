@@ -17,7 +17,8 @@ app.use(cors({
   origin: ["http://localhost:5173", 
   "http://localhost:5174",
   "https://assignment-eleven-df832.web.app",
-  "https://assignment-eleven-df832.firebaseapp.com"
+  "https://assignment-eleven-df832.firebaseapp.com",
+  "https://tvolu.vercel.app"
 ],
   credentials: true
 }))
@@ -69,6 +70,7 @@ async function run() {
     let transactionCollection = client.db('volunteerDB').collection('transactions')
     let requestvolunteersCollection = client.db('volunteerDB').collection('requestvolunteers')
     let feedbackCollection = client.db('volunteerDB').collection('feedback')
+    let newsContentsCollection = client.db('volunteerDB').collection('newsContents')
 
 
     // jwt starts
@@ -392,6 +394,53 @@ async function run() {
     });
     
 
+    
+app.post('/api/news-content', async (req, res) => {
+  try {
+    const { title, category, date, description, newsContent, image } = req.body;
+
+    // Check if all required fields are provided
+    if (!title || !category || !date || !description || !newsContent || !image) {
+      return res.status(400).json({ error: "All fields are required" });
+    }
+
+    // Prepare the news content object to insert
+    const newsContentData = {
+      title,
+      category,
+      date,
+      description,
+      newsContent,
+      image,
+      createdAt: new Date(), // Optionally add a createdAt field
+    };
+
+    // Insert the news content into the database
+    const result = await newsContentsCollection.insertOne(newsContentData);
+
+    if (result.acknowledged) {
+      res.status(201).json({ message: "News content added successfully", data: result });
+    } else {
+      res.status(500).json({ error: "Failed to insert news content" });
+    }
+  } catch (error) {
+    console.error('Error adding news content:', error);
+    res.status(500).json({ error: 'An error occurred while adding news content' });
+  }
+});
+
+app.get('/api/news-content',async (req,res) => {
+  try {
+    let result=await newsContentsCollection.find().limit(6).toArray()
+    if (result.length===0) {
+      return res.send('No data found').status(404)
+    }
+
+    return res.send(result).status(200)
+  } catch (error) {
+    res.send({message:'internal server error',error}).status(500)
+  }
+})
 
     await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
