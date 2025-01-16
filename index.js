@@ -18,7 +18,7 @@ app.use(cors({
     "http://localhost:5174",
     "https://assignment-eleven-df832.web.app",
     "https://assignment-eleven-df832.firebaseapp.com",
-    "https://tvolu.vercel.app"
+    "https://tvolu.vercel.app",
   ],
   credentials: true
 }))
@@ -72,7 +72,7 @@ async function run() {
     let requestvolunteersCollection = client.db('volunteerDB').collection('requestvolunteers')
     let feedbackCollection = client.db('volunteerDB').collection('feedback')
     let newsContentsCollection = client.db('volunteerDB').collection('newsContents')
-
+    let donationsCollection = client.db('volunteerDB').collection('donations')
 
     // jwt starts
     app.post('/jwt', async (req, res) => {
@@ -369,6 +369,32 @@ async function run() {
 
 
 
+
+
+
+    app.post('/api/donations', async (req, res) => {
+      try {
+        const { title, description, collected, target, image, email } = req.body;
+        console.log(req.body);
+
+        if (!title || !description || !collected || !target || !image) {
+          return res.status(400).json({ message: 'All fields are required' });
+        }
+
+        const donation = { createdAt: new Date(), email, title, description, collected: parseFloat(collected), target: parseFloat(target), image, createdAt: new Date() };
+        const result = await donationsCollection.insertOne(donation);
+
+        res.status(201).json({ message: 'Donation created successfully', data: result });
+      } catch (error) {
+        console.error('Error creating donation:', error);
+        res.status(500).json({ message: 'Internal Server Error' });
+      }
+    });
+
+
+
+
+
     app.get('/donation-success', async (req, res) => {
       const { session_id } = req.query;
       // console.log(session_id);
@@ -454,44 +480,44 @@ async function run() {
     // app.get('/api/all-news', async (req, res) => {
     //   try {
     //     const { category, sortByDate, search } = req.query;
-    
+
     //     // Build query object dynamically based on parameters
     //     const query = {};
     //     if (category) query.category = category;
     //     if (search) query.title = { $regex: search, $options: 'i' }; // Search by title (case-insensitive)
-    
+
     //     // Fetch data with sorting
     //     const result = await newsContentsCollection
     //       .find(query)
     //       .sort(sortByDate === 'true' ? { date: -1 } : {}) // Sort by date if requested
     //       .toArray();
-    
+
     //     if (result.length === 0) {
     //       return res.status(404).send('No data found');
     //     }
-    
+
     //     return res.status(200).send(result);
     //   } catch (error) {
     //     return res.status(500).send({ message: 'Internal server error', error });
     //   }
     // });
-    
-    
-    
+
+
+
     app.get('/api/all-news', async (req, res) => {
       try {
         const { category, sortByDate, search, page = 1, limit = 10 } = req.query;
-    
+
         // Build query object dynamically based on parameters
         const query = {};
         if (category) query.category = category;
         if (search) query.title = { $regex: search, $options: 'i' }; // Search by title (case-insensitive)
-    
+
         // Pagination parameters
         const pageNum = parseInt(page, 10) || 1; // Default to page 1
         const pageLimit = parseInt(limit, 10) || 10; // Default to 10 items per page
         const skip = (pageNum - 1) * pageLimit;
-    
+
         // Fetch data with pagination and sorting
         const result = await newsContentsCollection
           .find(query)
@@ -499,14 +525,14 @@ async function run() {
           .skip(skip)
           .limit(pageLimit)
           .toArray();
-    
+
         // Count total number of items for pagination metadata
         const totalItems = await newsContentsCollection.countDocuments(query);
-    
+
         if (result.length === 0) {
           return res.status(404).send('No data found');
         }
-    
+
         return res.status(200).send({
           data: result,
           totalItems,
@@ -517,7 +543,7 @@ async function run() {
         return res.status(500).send({ message: 'Internal server error', error });
       }
     });
-    
+
 
 
 
