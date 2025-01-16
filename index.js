@@ -45,7 +45,8 @@ const verify = async (req, res, next) => {
 
 
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
-const uri = `mongodb+srv://${process.env.USER_DB}:${process.env.USER_PASS}@cluster0.oypj9vn.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
+// const uri = `mongodb+srv://${process.env.USER_DB}:${process.env.USER_PASS}@cluster0.oypj9vn.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
+const uri = `mongodb://localhost:27017/`;
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
 const client = new MongoClient(uri, {
@@ -244,7 +245,7 @@ async function run() {
       if (req.params.email !== req.user.email) {
         return res.status(403).send({ message: 'unauthorized' })
       }
-      console.log(req.user.email);
+      // console.log(req.user.email);
       let query = { volunteer_email: email }
       let result = await requestvolunteersCollection.find(query).toArray();
       res.send(result)
@@ -370,7 +371,7 @@ async function run() {
 
     app.get('/donation-success', async (req, res) => {
       const { session_id } = req.query;
-      console.log(session_id);
+      // console.log(session_id);
 
 
       try {
@@ -397,7 +398,8 @@ async function run() {
 
     app.post('/api/news-content', async (req, res) => {
       try {
-        const { title, category, date, description, newsContent, image } = req.body;
+        const { title, category, date, description, newsContent, image, email } = req.body;
+        // console.log(req.body);
 
         // Check if all required fields are provided
         if (!title || !category || !date || !description || !newsContent || !image) {
@@ -410,6 +412,7 @@ async function run() {
           category,
           date,
           description,
+          email,
           newsContent,
           image,
           createdAt: new Date(), // Optionally add a createdAt field
@@ -436,17 +439,186 @@ async function run() {
           .sort({ _id: -1 }) // Sorts by the most recent `_id` (MongoDB ObjectId includes a timestamp)
           .limit(6)
           .toArray();
-    
+
         if (result.length === 0) {
           return res.status(404).send('No data found');
         }
-    
+
         return res.status(200).send(result);
       } catch (error) {
         return res.status(500).send({ message: 'Internal server error', error });
       }
     });
+
+
+    // app.get('/api/all-news', async (req, res) => {
+    //   try {
+    //     const { category, sortByDate, search } = req.query;
     
+    //     // Build query object dynamically based on parameters
+    //     const query = {};
+    //     if (category) query.category = category;
+    //     if (search) query.title = { $regex: search, $options: 'i' }; // Search by title (case-insensitive)
+    
+    //     // Fetch data with sorting
+    //     const result = await newsContentsCollection
+    //       .find(query)
+    //       .sort(sortByDate === 'true' ? { date: -1 } : {}) // Sort by date if requested
+    //       .toArray();
+    
+    //     if (result.length === 0) {
+    //       return res.status(404).send('No data found');
+    //     }
+    
+    //     return res.status(200).send(result);
+    //   } catch (error) {
+    //     return res.status(500).send({ message: 'Internal server error', error });
+    //   }
+    // });
+    
+    
+    
+    app.get('/api/all-news', async (req, res) => {
+      try {
+        const { category, sortByDate, search, page = 1, limit = 10 } = req.query;
+    
+        // Build query object dynamically based on parameters
+        const query = {};
+        if (category) query.category = category;
+        if (search) query.title = { $regex: search, $options: 'i' }; // Search by title (case-insensitive)
+    
+        // Pagination parameters
+        const pageNum = parseInt(page, 10) || 1; // Default to page 1
+        const pageLimit = parseInt(limit, 10) || 10; // Default to 10 items per page
+        const skip = (pageNum - 1) * pageLimit;
+    
+        // Fetch data with pagination and sorting
+        const result = await newsContentsCollection
+          .find(query)
+          .sort(sortByDate === 'true' ? { date: -1 } : {})
+          .skip(skip)
+          .limit(pageLimit)
+          .toArray();
+    
+        // Count total number of items for pagination metadata
+        const totalItems = await newsContentsCollection.countDocuments(query);
+    
+        if (result.length === 0) {
+          return res.status(404).send('No data found');
+        }
+    
+        return res.status(200).send({
+          data: result,
+          totalItems,
+          totalPages: Math.ceil(totalItems / pageLimit),
+          currentPage: pageNum,
+        });
+      } catch (error) {
+        return res.status(500).send({ message: 'Internal server error', error });
+      }
+    });
+    
+
+
+
+    app.get('/api/mynews/:email', async (req, res) => {
+      try {
+        const email = req.params.email;
+
+        // Query the collection for documents where the email field matches the given email
+        const result = await newsContentsCollection.find({ email }).toArray();
+
+        // console.log(result);
+        return res.send(result);
+      } catch (error) {
+        console.error('Error fetching news:', error);
+        return res.status(500).send('Internal Server Error');
+      }
+    });
+
+
+    app.delete('/api/mynews/:id', async (req, res) => {
+      try {
+        const { id } = req.params;
+        const result = await newsContentsCollection.deleteOne({ _id: new ObjectId(id) });
+        if (result.deletedCount === 1) {
+          res.status(200).json({ message: 'News deleted successfully' });
+        } else {
+          res.status(404).json({ message: 'News not found' });
+        }
+      } catch (error) {
+        console.error('Error deleting news:', error);
+        res.status(500).json({ message: 'Error deleting news' });
+      }
+    });
+
+
+
+
+    // Fetch user's news
+    app.get('/api/mynews/:email', async (req, res) => {
+      try {
+        const { email } = req.params;
+        const news = await newsContentsCollection.find({ email }).toArray();
+        res.json(news);
+      } catch (error) {
+        res.status(500).send('Error fetching news');
+      }
+    });
+
+    // Update specific news
+    app.put('/api/mynews/update/:id', async (req, res) => {
+      try {
+        const { id } = req.params;
+        const updatedNews = req.body;
+
+        // Debugging: Log the ID and the update data
+        console.log('Updating news with ID:', id);
+        console.log('Update data:', updatedNews);
+
+        // Validate ID format
+        if (!ObjectId.isValid(id)) {
+          return res.status(400).json({ error: 'Invalid ID format' });
+        }
+
+        const { _id, ...sendingUpdatedNews } = updatedNews
+        console.log('send', sendingUpdatedNews);
+
+        const result = await newsContentsCollection.findOneAndUpdate(
+          { _id: new ObjectId(id) }, // Convert to ObjectId
+          { $set: sendingUpdatedNews },
+          { returnDocument: 'after' } // Return the updated document
+        );
+        console.log('Database response:', result);
+        // if (result.value) {
+        //   // No document found
+        //   return res.status(404).json({ error: 'News not found' });
+        // }
+
+
+
+
+        res.json(result); // Send the updated document
+      } catch (error) {
+        console.error('Error updating news:', error);
+        res.status(500).json({ error: 'Error updating news' });
+      }
+    });
+
+    // Delete specific news
+    app.delete('/api/mynews/:id', async (req, res) => {
+      try {
+        const { id } = req.params;
+        const result = await newsContentsCollection.deleteOne({ _id: new ObjectId(id) });
+
+        if (result.deletedCount > 0) res.status(200).send('News deleted');
+        else res.status(404).send('News not found');
+      } catch (error) {
+        res.status(500).send('Error deleting news');
+      }
+    });
+
+
 
     app.get('/readmore/:id', async (req, res) => {
       try {
