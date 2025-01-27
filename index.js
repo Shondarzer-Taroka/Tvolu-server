@@ -44,6 +44,9 @@ const verify = async (req, res, next) => {
 
 
 
+
+
+
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 // const uri = `mongodb+srv://${process.env.USER_DB}:${process.env.USER_PASS}@cluster0.oypj9vn.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 const uri = `mongodb://localhost:27017/`;
@@ -68,6 +71,7 @@ async function run() {
 
     let addedvolunteersCollection = client.db('volunteerDB').collection('addedvolunteers')
     // const collection = db.collection('transactions');
+    let usersCollection = client.db('volunteerDB').collection('users')
     let transactionCollection = client.db('volunteerDB').collection('transactions')
     let requestvolunteersCollection = client.db('volunteerDB').collection('requestvolunteers')
     let feedbackCollection = client.db('volunteerDB').collection('feedback')
@@ -75,13 +79,66 @@ async function run() {
     let donationsCollection = client.db('volunteerDB').collection('donations')
 
     // jwt starts
+    // app.post('/jwt', async (req, res) => {
+    //   let user = req.body
+
+
+    //   let userInfo = await usersCollection.findOne({ email: user.email })
+    //   if (userInfo.email !== user.email) {
+    //     userInfo={email:user.email}
+    //     console.log('ase', userInfo);
+
+    //   }
+    //   let token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '7d' })
+    //   console.log(token);
+    //   res.cookie('token', token, cokieOption)
+    //     .send({ success: true })
+    // })
+
     app.post('/jwt', async (req, res) => {
-      let user = req.body
-      let token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '7d' })
-      console.log(token);
-      res.cookie('token', token, cokieOption)
-        .send({ success: true })
-    })
+      try {
+        const { email } = req.body;
+
+        // Validate input
+        if (!email) {
+          return res.status(400).json({ success: false, message: 'Email is required' });
+        }
+
+        // Find the user in the database
+        let userInfo = await usersCollection.findOne({ email });
+        console.log('info', userInfo);
+
+        // If user does not exist, create a default user object
+        if (!userInfo) {
+          userInfo = { email, role: 'user' }; // Default role as 'user'
+          console.log('User not found, using default:', userInfo);
+        }
+
+        // Generate JWT token with required fields
+        const token = jwt.sign({ email: userInfo.email, role: userInfo.role }, process.env.ACCESS_TOKEN_SECRET, {
+          expiresIn: '7d', // Set token expiration
+        });
+
+        console.log('Generated Token:', token);
+
+        // Define secure cookie options
+        const cookieOptions = {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production', // Secure in production
+          maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+        };
+
+        // Set token in cookies
+        res.cookie('token', token, cookieOptions);
+
+        // Send success response
+        res.status(200).json({ success: true, token });
+      } catch (error) {
+        console.error('Error in /jwt endpoint:', error);
+        res.status(500).json({ success: false, message: 'An error occurred' });
+      }
+    });
+
 
 
     app.post('/logout', async (req, res) => {
@@ -92,6 +149,100 @@ async function run() {
       // console.log(user);
     })
     // jwt ends
+
+    // // users
+    app.post('/api/users', async (req, res) => {
+      try {
+        const { name, email, photo } = req.body;
+        console.log('user', req.body);
+
+        // Validate incoming data
+        if (!name || !email || !photo) {
+          return res.status(400).json({ error: 'All fields are required' });
+        }
+
+        // Check if the user already exists
+        const existingUser = await usersCollection.findOne({ email });
+        if (existingUser) {
+          return res.status(409).json({ error: 'User already exists' });
+        }
+
+        // Default role as 'user'
+        const newUser = {
+          name,
+          email,
+          photo,
+          role: 'user', // Default role
+          createdAt: new Date(),
+        };
+
+        // Insert user into the database
+        const result = await usersCollection.insertOne(newUser);
+        console.log('res', result);
+
+        res.status(201).json({
+          message: 'User registered successfully',
+          userId: result.insertedId,
+        });
+      } catch (error) {
+        console.error('Error saving user:', error);
+        res.status(500).json({ error: 'An error occurred while saving the user' });
+      }
+    });
+
+
+   
+    
+    app.get('/api/users', async (req, res) => {
+      try {
+        // Extract token from the `Cookie` header
+        const cookieHeader = req.headers.cookie;
+    
+        if (!cookieHeader) {
+          return res.status(401).send({ message: 'Unauthorized: No token provided' });
+        }
+    
+        // Parse the cookie string to extract the token
+        const cookies = cookieHeader.split(';').reduce((acc, cookie) => {
+          const [key, value] = cookie.split('=').map((part) => part.trim());
+          acc[key] = value;
+          return acc;
+        }, {});
+    
+        const token = cookies.token; // Assuming the token is stored as 'token'
+        if (!token) {
+          return res.status(401).send({ message: 'Unauthorized: Token not found in cookies' });
+        }
+    
+        console.log('Token from cookie:', token);
+    
+        // Verify the token
+        jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, async (err, decoded) => {
+          if (err) {
+            console.error('Token verification error:', err);
+            return res.status(401).send({ message: 'Unauthorized: Invalid token' });
+          }
+    
+          console.log('Decoded Token:', decoded);
+    
+          // Check if the user has admin role
+          if (decoded.role !== 'admin') {
+            return res.status(403).send({ message: 'Forbidden: Admins only' });
+          }
+    
+          // Fetch all users from the database
+          const result = await usersCollection.find().toArray();
+          res.status(200).send(result);
+        });
+      } catch (error) {
+        console.error('Error fetching users:', error);
+        res.status(500).send({ message: 'An error occurred while fetching users' });
+      }
+    });
+    
+    
+    
+
 
 
     app.get('/volunteerneed', async (req, res) => {
@@ -272,52 +423,64 @@ async function run() {
 
     // //  payment related
 
+
+
+
     // app.post('/create-checkout-session', async (req, res) => {
-    //   const { name, email, amount } = req.body;
+    //   const { name, email, amount,cardId } = req.body;
+
+    //   // Validate input
+    //   if (!amount || isNaN(amount) || amount <= 0) {
+    //     return res.status(400).json({ error: 'Invalid donation amount' });
+    //   }
 
     //   try {
+    //     // Prepare line items for the checkout session
+    //     const lineItems = [
+    //       {
+    //         price_data: {
+    //           currency: 'usd',
+    //           product_data: {
+    //             name: 'Donation',
+    //             description: `Donation by ${name}`,
+    //           },
+    //           unit_amount: parseInt(amount) * 100, // Convert to cents
+    //         },
+    //         quantity: 1,
+    //       },
+    //     ];
+
+    //     // Create a checkout session
     //     const session = await stripe.checkout.sessions.create({
     //       payment_method_types: ['card'],
     //       mode: 'payment',
-    //       line_items: [
-    //         {
-    //           price_data: {
-    //             currency: 'usd',
-    //             product_data: {
-    //               name: 'Donation',
-    //               description: `Donation by ${name}`,
-    //             },
-    //             unit_amount: parseInt(amount) * 100, // Convert to cents
-    //           },
-    //           quantity: 1,
-    //         },
-    //       ],
+    //       line_items: lineItems,
     //       customer_email: email,
-    //       success_url: `http://localhost:5173/success?session_id=${session.id}`,
-    //       cancel_url: 'http://localhost:5173/cancel',
+    //       success_url: 'https://tvolu.vercel.app/success?session_id={CHECKOUT_SESSION_ID}', // Placeholder ID
+    //       cancel_url: 'https://tvolu.vercel.app/cancel',
     //     });
 
     //     // Save transaction details to MongoDB
-
-
-    //    let result= await transactionCollection.insertOne({
+    //     await transactionCollection.insertOne({
     //       name,
     //       email,
-    //       amount,
+    //       cardId,
+    //       amount: parseFloat(amount), // Ensure the amount is a float
     //       sessionId: session.id,
     //       createdAt: new Date(),
     //     });
 
+    //     // Return the session URL
     //     res.status(200).json({ url: session.url });
     //   } catch (error) {
     //     console.error('Stripe checkout error:', error);
-    //     res.status(500).json({ error: 'Something went wrong' });
+    //     res.status(500).json({ error: error.message || 'Something went wrong' });
     //   }
     // });
 
 
     app.post('/create-checkout-session', async (req, res) => {
-      const { name, email, amount } = req.body;
+      const { name, email, amount, cardId } = req.body;
 
       // Validate input
       if (!amount || isNaN(amount) || amount <= 0) {
@@ -354,10 +517,24 @@ async function run() {
         await transactionCollection.insertOne({
           name,
           email,
+          cardId,
           amount: parseFloat(amount), // Ensure the amount is a float
           sessionId: session.id,
           createdAt: new Date(),
         });
+
+        // Update the collected amount in the donationCollections
+        const updatedDonation = await donationsCollection.findOneAndUpdate(
+          { _id: new ObjectId(cardId) }, // Find the specific donation document by cardId
+          { $inc: { collected: parseFloat(amount) } }, // Increment the collected amount
+          { returnDocument: 'after' } // Return the updated document
+        );
+
+        // if (!updatedDonation.value) {
+        //   return res.status(404).json({ error: 'Donation not found' });
+        // }
+
+        console.log('Updated donation:', updatedDonation.value);
 
         // Return the session URL
         res.status(200).json({ url: session.url });
@@ -371,17 +548,17 @@ async function run() {
 
 
 
-
     app.post('/api/donations', async (req, res) => {
       try {
-        const { title, description, collected, target, image, email } = req.body;
+        const { title, description, collected, target, image, email, category } = req.body;
         console.log(req.body);
+
 
         if (!title || !description || !collected || !target || !image) {
           return res.status(400).json({ message: 'All fields are required' });
         }
 
-        const donation = { createdAt: new Date(), email, title, description, collected: parseFloat(collected), target: parseFloat(target), image, createdAt: new Date() };
+        const donation = { createdAt: new Date(), email, category, title, description, collected: parseFloat(collected), target: parseFloat(target), image, createdAt: new Date() };
         const result = await donationsCollection.insertOne(donation);
 
         res.status(201).json({ message: 'Donation created successfully', data: result });
@@ -392,6 +569,39 @@ async function run() {
     });
 
 
+    app.get('/api/donations', async (req, res) => {
+      try {
+        const { category, sortByDate, search, page = 1, limit = 10 } = req.query;
+        console.log(req.query);
+
+        // Build query object dynamically
+        const query = {};
+        if (category) query.category = category;
+        if (search) query.title = { $regex: search, $options: 'i' }; // Case-insensitive search
+
+        // Convert page and limit to integers
+        const pageInt = parseInt(page, 10);
+        const limitInt = parseInt(limit, 10);
+
+        // Fetch data with filtering, sorting, and pagination
+        const totalItems = await donationsCollection.countDocuments(query);
+        const donations = await donationsCollection
+          .find(query)
+          .sort(sortByDate === 'true' ? { createdAt: -1 } : {}) // Sort by date if requested
+          .skip((pageInt - 1) * limitInt)
+          .limit(limitInt)
+          .toArray();
+
+        return res.status(200).send({
+          data: donations,
+          totalPages: Math.ceil(totalItems / limitInt),
+          currentPage: pageInt,
+        });
+      } catch (error) {
+        console.error('Error fetching donations:', error);
+        return res.status(500).send({ message: 'Internal server error', error });
+      }
+    });
 
 
 
